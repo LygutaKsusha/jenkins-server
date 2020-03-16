@@ -27,6 +27,7 @@ Parameters:
   VpcId:
     Description: VPC ID that this stack will be launched in.
     Type: AWS::EC2::VPC::Id
+    Default: vpc-d4c6beae
     AllowedPattern: "[a-z0-9-]*"
   JenkinsPort:
     Type: Number
