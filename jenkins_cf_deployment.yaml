@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AWS CloudFormation Stand Alone Jenkins server
+Description: Test AWS CloudFormation Stand Alone Jenkins server
 Parameters:
   InstanceType:
     Type: String
@@ -27,7 +27,10 @@ Parameters:
   VpcId:
     Description: VPC ID that this stack will be launched in.
     Type: AWS::EC2::VPC::Id
-    Default: vpc-d4c6beae
+    AllowedPattern: "[a-z0-9-]*"
+  SubnetId:
+    Description: VPC Subnet that this stack will be launched in.
+    Type: AWS::EC2::Subnet::Id
     AllowedPattern: "[a-z0-9-]*"
   JenkinsPort:
     Type: Number
@@ -52,7 +55,7 @@ Resources:
     Description: Jenkins Standalone EC2 Instance running Java 8, and Jenkins.
     Type: AWS::EC2::Instance
 
-    # Properties of the Instance that we are launching.
+    # Properties of the Instance that we are launching. Here we define things like EBS volumes, SG's, The AMI used, etc..
     Properties:
       # Pull the Image or AMI from the RegionMap Map we defined earlier
       ImageId: !FindInMap
@@ -65,6 +68,7 @@ Resources:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
           DeleteOnTermination: true
+          SubnetId: !Ref SubnetId
           # This defines the SG that we will place on the ENI, will create the SG after the instance resource definition
           GroupSet: 
             - !Ref ServerSecurityGroup
@@ -76,9 +80,9 @@ Resources:
           Value: !Ref Team
         - Key: bv:nexus:vpc
           Value: !Ref Environment
-      # The user data to copy script from S3 bucket for Jenkins set up
+      # The user data to instantiate the cfn service, which will report back to CloudFormaton once the instance is set up
       UserData:
-        Fn::Base64: !Sub | 
+        Fn::Base64: !Sub |     # No more Fn::Join needed
           #!/bin/bash -x
           wget https://elasticbeanstalk-eu-west-3-993527713627.s3.eu-west-3.amazonaws.com/myscript.sh
           chmod +x myscript.sh
@@ -100,7 +104,7 @@ Resources:
           ToPort: !Ref JenkinsPort
           CidrIp: !Ref SSHLocation
 
-# Specify outputs for the stack.
+# Specify any outputs for the stack.
 Outputs:
   TemplateID:
     Description: 'Jenkins Single Server'
