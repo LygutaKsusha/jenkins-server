@@ -1,1 +1,2 @@
 Some text here
+This is very simple test file
