@@ -2,15 +2,6 @@
 
 yum install -y aws-cfn-bootstrap git
 
-echo "=======Configure Additional EBS volume for Jenkins snapshot======="
-mkdir /jenkins_home
-ln -s /var/lib/jenkins /jenkins_home
-echo -e "o\nn\np\n1\n\n\nw" | sudo fdisk /dev/sdf
-sleep 3
-sudo mkfs.ext4 /dev/sdf1
-e2label /dev/sdf1 JENKINS
-echo -e "LABEL=JENKINS     /var/lib/jenkins_home    ext4   defaults 0 0" >> /etc/fstab
-mount -a
 
 echo "=========Install Jenkins stable release==========="
 yum remove -y java
@@ -20,3 +11,13 @@ rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
 yum install -y jenkins
 service jenkins start
 chkconfig jenkins on
+
+echo "=======Configure Additional EBS volume for Jenkins snapshot======="
+mkdir /jenkins_home
+echo -e "o\nn\np\n1\n\n\nw" | sudo fdisk /dev/sdf
+sleep 3
+sudo mkfs.ext4 /dev/sdf1
+e2label /dev/sdf1 JENKINS
+echo -e "LABEL=JENKINS     /jenkins_home    ext4   defaults 0 0" >> /etc/fstab
+mount -a
+ln -s /var/lib/jenkins /jenkins_home
