@@ -1,9 +1,22 @@
-#!bin/bash
-sudo yum install -y wget java-1.8.0-openjdk java-1.8.0-openjdk-devel net-tools git aws-cfn-bootstrap
-sudo rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
-sudo rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
-sudo mkdir -p /home/jenkins /var/lib/jenkins/.ssh /var/cache/jenkins/war /var/log/jenkins
-sudo yum install -y jenkins
-sudo systemctl enable jenkins.service
-sudo systemctl start jenkins.service
+#!/bin/bash -x
+
+yum install -y aws-cfn-bootstrap git
+
+echo "=======Configure Additional EBS volume for Jenkins snapshot======="
+mkdir /jenkins_home
+ln -s /var/lib/jenkins /jenkins_home
+echo -e "o\nn\np\n1\n\n\nw" | sudo fdisk /dev/sdf
+sleep 3
+sudo mkfs.ext4 /dev/sdf1
+e2label /dev/sdf1 JENKINS
+echo -e "LABEL=JENKINS     /var/lib/jenkins_home    ext4   defaults 0 0" >> /etc/fstab
+mount -a
+
+echo "=========Install Jenkins stable release==========="
+yum remove -y java
+yum install -y java-1.8.0-openjdk
+wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
+rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
+yum install -y jenkins
+service jenkins start
+chkconfig jenkins on
