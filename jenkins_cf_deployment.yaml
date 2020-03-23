@@ -28,13 +28,24 @@ Parameters:
     Description: VPC ID that this stack will be launched in.
     Type: AWS::EC2::VPC::Id
     AllowedPattern: "[a-z0-9-]*"
-  SubnetId:
-    Description: VPC Subnet that this stack will be launched in.
-    Type: AWS::EC2::Subnet::Id
-    AllowedPattern: "[a-z0-9-]*"
   JenkinsPort:
     Type: Number
     Default: 8080
+  VPCZoneIdentifier:
+    Description: "List the Subnet Ids of the instances"
+    Type: AWS::EC2::Subnet::Id
+  MaxSizeASG:
+    Description: "Enter the Max Size for the ASG"
+    Type: String
+    Default: 1
+  MinSizeASG:
+    Description: "Enter the Min Size for the ASG"
+    Type: String
+    Default: 1
+  Ec2AutoscaleDesiredCapacity:
+    Description: AutoScalingGroup DesiredCapacity
+    Type: String
+    Default: '1'
 
 # Create an easy mapping, simply mapping the region selected to the appropriate Amazon Linux 2 AMI
 Mappings: 
@@ -49,46 +60,114 @@ Mappings:
       AMI: 'ami-6cd6f714'
 
 # Define Resources that will be launched via this template
-Resources:
-  # EC2 Server Instance Definition
-  JenkinsInstance:
-    Description: Jenkins Standalone EC2 Instance running Java 8, and Jenkins.
-    Type: AWS::EC2::Instance
 
-    # Properties of the Instance that we are launching. Here we define things like EBS volumes, SG's, The AMI used, etc..
+Resources:
+# ------------------------------------------------------------#
+#  DLM LifecyclePolicy
+# ------------------------------------------------------------# 
+  LifecyclePolicy:
+    Type: "AWS::DLM::LifecyclePolicy"
     Properties:
-      # Pull the Image or AMI from the RegionMap Map we defined earlier
-      ImageId: !FindInMap
+      Description: "Daily EBS Snapshot"
+      State: "ENABLED"
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/AWSDataLifecycleManagerDefaultRole"
+      PolicyDetails:
+        ResourceTypes:
+          - "VOLUME"
+        TargetTags:
+          -
+            Key: "Name"
+            Value: "qa-testserver-jenkins"
+          
+        Schedules:
+          -
+            Name: "EBS-daily-snapshot"
+            TagsToAdd:
+              -
+                Key: "type"
+                Value: "DailySnapshot"
+              
+            CreateRule:
+              Interval: 24
+              IntervalUnit: "HOURS"
+              Times:
+                - "14:35"
+            RetainRule:
+              Count: 1
+            CopyTags: true
+# ------------------------------------------------------------#
+#  AutoScaling Group 
+# ------------------------------------------------------------#
+  myASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+      - !Ref 'VPCZoneIdentifier'
+      AutoScalingGroupName: myASG
+      MinSize: !Ref 'MinSizeASG'
+      MaxSize: !Ref 'MaxSizeASG'
+      DesiredCapacity: !Ref 'Ec2AutoscaleDesiredCapacity'
+      HealthCheckGracePeriod: 300
+      LaunchTemplate:
+        LaunchTemplateId: !Ref 'myLaunchTemplate'
+        Version: !GetAtt 'myLaunchTemplate.LatestVersionNumber'
+# ------------------------------------------------------------#
+#  Launch Template for EC2
+# ------------------------------------------------------------#
+  myLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties: 
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateData: 
+        BlockDeviceMappings:
+          - DeviceName: /dev/sdf
+            Ebs:
+              DeleteOnTermination: 'false'
+              VolumeSize: '4'
+
+        ImageId: !FindInMap
         - RegionMap
         - !Ref 'AWS::Region'
-        - AMI
-      # Pull the Instance Type, Subnet, KeyName, etc from the Parameters we defined earlier
-      InstanceType: !Ref InstanceType
-      NetworkInterfaces:
-        - AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          DeleteOnTermination: true
-          SubnetId: !Ref SubnetId
-          # This defines the SG that we will place on the ENI, will create the SG after the instance resource definition
-          GroupSet: 
-            - !Ref ServerSecurityGroup
-      KeyName: !Ref KeyName
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-testserver-jenkins"
-        - Key: bv:nexus:team
-          Value: !Ref Team
-        - Key: bv:nexus:vpc
-          Value: !Ref Environment
-      # The user data to instantiate the cfn service, which will report back to CloudFormaton once the instance is set up
-      UserData:
-        Fn::Base64: !Sub |     # No more Fn::Join needed
-          #!/bin/bash -x
-          wget https://elasticbeanstalk-eu-west-3-993527713627.s3.eu-west-3.amazonaws.com/myscript.sh
-          chmod +x myscript.sh
-          ./myscript.sh
+        - AMI         
 
-  # Define the Security Group that will be appended to the ENI of the Instance we are creating.  
+
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+             - Key: Name
+               Value: !Sub "${Environment}-testserver-jenkins"
+             - Key: bv:nexus:team
+               Value: !Ref Team
+             - Key: bv:nexus:vpc
+               Value: !Ref Environment
+          - ResourceType: volume
+            Tags:
+             - Key: Name
+               Value: !Sub "${Environment}-testserver-jenkins"
+             - Key: bv:nexus:team
+               Value: !Ref Team
+             - Key: bv:nexus:vpc
+               Value: !Ref Environment
+
+
+
+        SecurityGroupIds: 
+          - !Ref ServerSecurityGroup
+        
+        InstanceInitiatedShutdownBehavior: terminate
+
+        UserData:
+          Fn::Base64: !Sub |     #
+            #!/bin/bash -x
+            wget https://elasticbeanstalk-eu-west-3-993527713627.s3.eu-west-3.amazonaws.com/myscript.sh
+            chmod +x myscript.sh
+            ./myscript.sh      
+# ------------------------------------------------------------#
+#  Security Group
+# ------------------------------------------------------------#
   ServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -103,15 +182,10 @@ Resources:
           FromPort: !Ref JenkinsPort
           ToPort: !Ref JenkinsPort
           CidrIp: !Ref SSHLocation
-
-# Specify any outputs for the stack.
+# ------------------------------------------------------------#
+#  Outputs
+# ------------------------------------------------------------#
 Outputs:
   TemplateID:
     Description: 'Jenkins Single Server'
     Value: 'Jenkins Single Server'
-  PublicIp:
-    Description: 'The Public IP address of the EC2 Instance'
-    Value: !GetAtt JenkinsInstance.PublicIp
-  ServerAddress:
-    Description: 'The public DNS address for this instance'
-    Value: !GetAtt JenkinsInstance.PublicDnsName
