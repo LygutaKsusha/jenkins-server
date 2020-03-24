@@ -46,6 +46,15 @@ Parameters:
     Description: AutoScalingGroup DesiredCapacity
     Type: String
     Default: '1'
+  SnapshotRetainCount:
+    Type: Number
+    Description: The Number of snapshots to retain
+    Default: 1
+  StartTime:
+    Type: String
+    Description: Start time of the snapshot
+    AllowedPattern: ^[0-1][0-9]:[0-9][0-9]$
+    Default: "07:00"
 
 # Create an easy mapping, simply mapping the region selected to the appropriate Amazon Linux 2 AMI
 Mappings: 
@@ -63,12 +72,12 @@ Mappings:
 
 Resources:
 # ------------------------------------------------------------#
-#  DLM LifecyclePolicy
+#  Snapshot LifecyclePolicy
 # ------------------------------------------------------------# 
-  LifecyclePolicy:
+  SnapshotLifeyclePolicy:
     Type: "AWS::DLM::LifecyclePolicy"
     Properties:
-      Description: "Daily EBS Snapshot"
+      Description: "EBS Volumes Snapshot - backup-dev on daily basis"
       State: "ENABLED"
       ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/AWSDataLifecycleManagerDefaultRole"
       PolicyDetails:
@@ -76,8 +85,8 @@ Resources:
           - "VOLUME"
         TargetTags:
           -
-            Key: "Name"
-            Value: "qa-testserver-jenkins"
+            Key: "Backup"
+            Value: "True"
           
         Schedules:
           -
@@ -91,9 +100,9 @@ Resources:
               Interval: 24
               IntervalUnit: "HOURS"
               Times:
-                - "14:35"
+                - !Ref StartTime
             RetainRule:
-              Count: 1
+              Count: !Ref SnapshotRetainCount
             CopyTags: true
 # ------------------------------------------------------------#
 #  AutoScaling Group 
@@ -146,11 +155,13 @@ Resources:
           - ResourceType: volume
             Tags:
              - Key: Name
-               Value: !Sub "${Environment}-testserver-jenkins"
+               Value: !Sub "${Environment}-testserver-jenkins"               
              - Key: bv:nexus:team
                Value: !Ref Team
              - Key: bv:nexus:vpc
                Value: !Ref Environment
+             - Key: "Backup"
+               Value: "True"
 
 
 
@@ -189,3 +200,7 @@ Outputs:
   TemplateID:
     Description: 'Jenkins Single Server'
     Value: 'Jenkins Single Server'
+
+  SnapshotLifeyclePolicy:
+    Description: EBS Volumes Snapshot - backup-dev on daily basis
+    Value: !Ref SnapshotLifeyclePolicy 
