@@ -2,7 +2,6 @@
 
 yum install -y aws-cfn-bootstrap git
 
-
 echo "=========Install Jenkins stable release==========="
 yum remove -y java
 yum install -y java-1.8.0-openjdk
@@ -21,5 +20,4 @@ e2label /dev/sdf1 JENKINS
 echo -e "LABEL=JENKINS     /jenkins_home    ext4   defaults 0 0" >> /etc/fstab
 mount -a
 mv -v /var/lib/jenkins/ /jenkins_home
-ln -s  /jenkins_home/jenkins  /var/lib/jenkins
 ln -s  /jenkins_home/jenkins  /var/lib/jenkins
