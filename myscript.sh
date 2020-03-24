@@ -16,8 +16,10 @@ echo "=======Configure Additional EBS volume for Jenkins snapshot======="
 mkdir /jenkins_home
 echo -e "o\nn\np\n1\n\n\nw" | sudo fdisk /dev/sdf
 sleep 3
-sudo mkfs.ext4 /dev/sdf1
+mkfs.ext4 /dev/sdf1
 e2label /dev/sdf1 JENKINS
 echo -e "LABEL=JENKINS     /jenkins_home    ext4   defaults 0 0" >> /etc/fstab
 mount -a
-ln -s /var/lib/jenkins /jenkins_home
+mv -v /var/lib/jenkins/ /jenkins_home
+ln -s  /jenkins_home/jenkins  /var/lib/jenkins
+ln -s  /jenkins_home/jenkins  /var/lib/jenkins
