@@ -103,79 +103,62 @@ Resources:
                 - !Ref StartTime
             RetainRule:
               Count: !Ref SnapshotRetainCount
-            CopyTags: true
+            CopyTags: true  
 # ------------------------------------------------------------#
 #  AutoScaling Group 
 # ------------------------------------------------------------#
-  myASG:
+  AutoScaling:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
       - !Ref 'VPCZoneIdentifier'
-      AutoScalingGroupName: myASG
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      AutoScalingGroupName: 'Jenkins ASG'
+      MaxSize: !Ref 'MinSizeASG'
       MinSize: !Ref 'MinSizeASG'
-      MaxSize: !Ref 'MaxSizeASG'
       DesiredCapacity: !Ref 'Ec2AutoscaleDesiredCapacity'
       HealthCheckGracePeriod: 300
-      LaunchTemplate:
-        LaunchTemplateId: !Ref 'myLaunchTemplate'
-        Version: !GetAtt 'myLaunchTemplate.LatestVersionNumber'
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-testserver-jenkins"
+          PropagateAtLaunch: 'true'
+        - Key: bv:nexus:team
+          Value: !Ref Team
+          PropagateAtLaunch: 'true'
+        - Key: bv:nexus:vpc
+          Value: !Ref Environment
+          PropagateAtLaunch: 'true'
 # ------------------------------------------------------------#
-#  Launch Template for EC2
+#  Launch Configuration
 # ------------------------------------------------------------#
-  myLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
     Properties: 
-      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
-      LaunchTemplateData: 
-        BlockDeviceMappings:
-          - DeviceName: /dev/sdf
-            Ebs:
-              DeleteOnTermination: 'false'
-              VolumeSize: '4'
+      AssociatePublicIpAddress: 'true'
+      BlockDeviceMappings: 
+        - DeviceName: /dev/sdf
+          Ebs:
+            DeleteOnTermination: 'false'
+            VolumeSize: '4'
 
-        ImageId: !FindInMap
-        - RegionMap
-        - !Ref 'AWS::Region'
-        - AMI         
+      ImageId: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - AMI 
+      KeyName: !Ref KeyName
+      LaunchConfigurationName: 'Jenkins Launch Configuration'
 
+      SecurityGroups: 
+        - !Ref ServerSecurityGroup
+      InstanceType: !Ref InstanceType
+      UserData:
+        Fn::Base64: !Sub |     #
+          #!/bin/bash -x
 
-        InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
+          wget https://elasticbeanstalk-eu-west-3-993527713627.s3.eu-west-3.amazonaws.com/myscript.sh
+          chmod +x myscript.sh
+          ./myscript.sh
 
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-             - Key: Name
-               Value: !Sub "${Environment}-testserver-jenkins"
-             - Key: bv:nexus:team
-               Value: !Ref Team
-             - Key: bv:nexus:vpc
-               Value: !Ref Environment
-          - ResourceType: volume
-            Tags:
-             - Key: Name
-               Value: !Sub "${Environment}-testserver-jenkins"               
-             - Key: bv:nexus:team
-               Value: !Ref Team
-             - Key: bv:nexus:vpc
-               Value: !Ref Environment
-             - Key: "Backup"
-               Value: "True"
-
-
-
-        SecurityGroupIds: 
-          - !Ref ServerSecurityGroup
-        
-        InstanceInitiatedShutdownBehavior: terminate
-
-        UserData:
-          Fn::Base64: !Sub |     #
-            #!/bin/bash -x
-            wget https://elasticbeanstalk-eu-west-3-993527713627.s3.eu-west-3.amazonaws.com/myscript.sh
-            chmod +x myscript.sh
-            ./myscript.sh      
 # ------------------------------------------------------------#
 #  Security Group
 # ------------------------------------------------------------#
@@ -203,4 +186,4 @@ Outputs:
 
   SnapshotLifeyclePolicy:
     Description: EBS Volumes Snapshot - backup-dev on daily basis
-    Value: !Ref SnapshotLifeyclePolicy 
+    Value: !Ref SnapshotLifeyclePolicy  
