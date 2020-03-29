@@ -55,6 +55,10 @@ Parameters:
     Description: Start time of the snapshot
     AllowedPattern: ^[0-1][0-9]:[0-9][0-9]$
     Default: "07:00"
+  SnapshotRoleName:
+    Type: String
+    Description: Name for the Snapshot creating role
+    Default: AWSDataLifecycleManagerDefaultRole
 
 # Create an easy mapping, simply mapping the region selected to the appropriate Amazon Linux 2 AMI
 Mappings: 
@@ -71,6 +75,44 @@ Mappings:
 # Define Resources that will be launched via this template
 
 Resources:
+
+# ------------------------------------------------------------#
+  # Role for Data Lifecycle Manager (DLM)
+  # Use this part if you don't have this role still enabled
+  # Otherwise just skip role creating
+  # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/snapshot-lifecycle.html
+# ------------------------------------------------------------#  
+
+  AWSDataLifecycleManagerDefaultRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "dlm.amazonaws.com"
+            Action:
+              - 'sts:AssumeRole'
+      RoleName: !Ref SnapshotRoleName
+      Policies:
+        - PolicyName: "DefaultDLM"
+          PolicyDocument:
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateSnapshot"
+                  - "ec2:DeleteSnapshot"
+                  - "ec2:DescribeVolumes"
+                  - "ec2:DescribeSnapshots"
+                Resource:
+                  - '*'
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateTags"
+                Resource:
+                  - 'arn:aws:ec2:*::snapshot/*'
+
 # ------------------------------------------------------------#
 #  Snapshot LifecyclePolicy
 # ------------------------------------------------------------# 
@@ -97,13 +139,14 @@ Resources:
                 Value: "DailySnapshot"
               
             CreateRule:
-              Interval: 24
+              Interval: 1
               IntervalUnit: "HOURS"
               Times:
                 - !Ref StartTime
             RetainRule:
               Count: !Ref SnapshotRetainCount
             CopyTags: true  
+
 # ------------------------------------------------------------#
 #  AutoScaling Group 
 # ------------------------------------------------------------#
@@ -183,7 +226,3 @@ Outputs:
   TemplateID:
     Description: 'Jenkins Single Server'
     Value: 'Jenkins Single Server'
-
-  SnapshotLifeyclePolicy:
-    Description: EBS Volumes Snapshot - backup-dev on daily basis
-    Value: !Ref SnapshotLifeyclePolicy  
