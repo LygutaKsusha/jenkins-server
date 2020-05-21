@@ -1,0 +1,6 @@
+[linux]
+# insert your IP
+[linux:vars]
+ansible_user=ec2-user
+#change to your *.pem file
+ansible_ssh_private_key_file=~/.ssh/test.pem
